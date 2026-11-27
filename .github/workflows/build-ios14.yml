@@ -45,6 +45,9 @@ jobs:
           grep -F '"iOS": { "minimumSystemVersion": "14.0" }' apps/adv-launcher/src-tauri/tauri.conf.json
           grep -F '"minimum_ios": "14.0"' tools/macos/ffmpeg.json
           grep -F 'attemptRotationToDeviceOrientation' apps/adv-launcher/src-tauri/src/game_ios.rs
+          grep -F 'build: { target: ["safari14"]' apps/adv-launcher/vite.config.ts
+          grep -F 'Array.prototype.at' apps/adv-launcher/index.html
+          grep -F 'boot-error' apps/adv-launcher/index.html
 
       - name: Install the Apple and Rust toolchains
         working-directory: hitode
@@ -66,6 +69,13 @@ jobs:
         run: |
           npm install --global "$(node --print "require('./apps/adv-launcher/package.json').packageManager")"
           pnpm --dir apps/adv-launcher install --frozen-lockfile
+
+      - name: Check the Safari 14 frontend build
+        working-directory: hitode/apps/adv-launcher
+        run: |
+          pnpm build
+          test -s dist/index.html
+          grep -F 'boot-error' dist/index.html
 
       - name: Fetch the pinned Wine build from upstream
         working-directory: hitode
