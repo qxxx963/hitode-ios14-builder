@@ -89,6 +89,13 @@ jobs:
           python3 apps/adv-launcher/scripts/icons.py
           python3 tools/macos/build.py --ios
           cd apps/adv-launcher
+          project=src-tauri/gen/apple/adv-launcher.xcodeproj/project.pbxproj
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 16.2;/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g' "$project"
+          grep -F 'IPHONEOS_DEPLOYMENT_TARGET = 14.0;' "$project"
+          if grep -F 'IPHONEOS_DEPLOYMENT_TARGET = 16.2;' "$project"; then
+            echo "Xcode project still targets iOS 16.2"
+            exit 1
+          fi
           PATH="$GITHUB_WORKSPACE/hitode/target/ios-ffmpeg/bin:$PATH" pnpm tauri ios build --ci --no-sign
           ipa="$RUNNER_TEMP/Hitode-unsigned.ipa"
           cp src-tauri/gen/apple/build/arm64/Hitode.ipa "$ipa"
