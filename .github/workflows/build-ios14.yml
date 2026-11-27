@@ -1,0 +1,119 @@
+name: Build Hitode v0.2.9 for iOS 14.8 (TrollStore)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hitode-ios14-trollstore
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: never
+  RUST_TOOLCHAIN: '1.99.1'
+  XCODE: /Applications/Xcode_26.6.app
+  IPHONEOS_DEPLOYMENT_TARGET: '14.0'
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 150
+    steps:
+      - name: Check out the iOS 14 builder
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: ios14-builder
+          persist-credentials: false
+
+      - name: Check out Hitode v0.2.9
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: hitode-project/hitode
+          ref: v0.2.9
+          path: hitode
+          persist-credentials: false
+
+      - name: Apply and check the iOS 14 patch
+        working-directory: hitode
+        run: |
+          patch=../ios14-builder/patches/hitode-v0.2.9-ios14.patch
+          git apply --check "$patch"
+          git apply "$patch"
+          grep -F '"iOS": { "minimumSystemVersion": "14.0" }' apps/adv-launcher/src-tauri/tauri.conf.json
+          grep -F '"minimum_ios": "14.0"' tools/macos/ffmpeg.json
+          grep -F 'attemptRotationToDeviceOrientation' apps/adv-launcher/src-tauri/src/game_ios.rs
+
+      - name: Install the Apple and Rust toolchains
+        working-directory: hitode
+        run: |
+          sudo xcode-select --switch "$XCODE"
+          xcodebuild -version
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --no-self-update
+          rustup default "$RUST_TOOLCHAIN"
+          rustup target add aarch64-apple-ios
+          rustc --version
+          echo "LIBCLANG_PATH=$(dirname "$(dirname "$(xcrun --find clang)")")/lib" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+
+      - name: Install the launcher packages
+        working-directory: hitode
+        run: |
+          npm install --global "$(node --print "require('./apps/adv-launcher/package.json').packageManager")"
+          pnpm --dir apps/adv-launcher install --frozen-lockfile
+
+      - name: Fetch the pinned Wine build from upstream
+        working-directory: hitode
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/wine"
+          wine_tag=$(python3 -c 'import json; print(json.load(open("tools/release/wine.json"))["dist"]["url"].split("/releases/download/")[1].split("/")[0])')
+          assets=$(gh api "repos/hitode-project/hitode/releases/tags/$wine_tag" \
+            --jq ".assets[] | select(.name | endswith(\".tar.xz\")) | [.id, .name] | @tsv")
+          while IFS=$'\t' read -r id name; do
+            gh api -H "Accept: application/octet-stream" "repos/hitode-project/hitode/releases/assets/$id" \
+              > "$RUNNER_TEMP/wine/$name"
+          done <<< "$assets"
+          python3 tools/release/fetch_wine.py "$RUNNER_TEMP/wine"
+          echo "ADV_WINE_DIST=$RUNNER_TEMP/wine/wine11-sse-strip" >> "$GITHUB_ENV"
+
+      - name: Build the unsigned iOS app
+        working-directory: hitode
+        run: |
+          python3 apps/adv-launcher/scripts/icons.py
+          python3 tools/macos/build.py --ios
+          cd apps/adv-launcher
+          PATH="$GITHUB_WORKSPACE/hitode/target/ios-ffmpeg/bin:$PATH" pnpm tauri ios build --ci --no-sign
+          ipa="$RUNNER_TEMP/Hitode-unsigned.ipa"
+          cp src-tauri/gen/apple/build/arm64/Hitode.ipa "$ipa"
+          unzip -q "$ipa" -d "$RUNNER_TEMP/ipa"
+          if codesign -dv "$RUNNER_TEMP/ipa/Payload/Hitode.app" 2>/dev/null; then
+            echo "Tauri unexpectedly signed the IPA"
+            exit 1
+          fi
+
+      - name: Sign and verify the TrollStore IPA
+        working-directory: hitode
+        run: |
+          brew install ldid
+          mkdir -p "$RUNNER_TEMP/dist"
+          ipa="$RUNNER_TEMP/dist/Hitode-0.2.9-ios14.8-trollstore.ipa"
+          python3 tools/ios/sign_ipa.py --trollstore "$RUNNER_TEMP/Hitode-unsigned.ipa" "$ipa"
+          python3 ../ios14-builder/scripts/verify_ipa.py "$ipa" --report "$RUNNER_TEMP/dist/verification.json"
+
+      - name: Scan the package for private data
+        working-directory: hitode
+        run: python3 tools/privacy/scan.py --artifacts "$RUNNER_TEMP"/dist/*
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hitode-ios14.8-trollstore
+          path: ${{ runner.temp }}/dist/
+          if-no-files-found: error
+          retention-days: 14
