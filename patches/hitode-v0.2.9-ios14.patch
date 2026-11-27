@@ -1,0 +1,72 @@
+diff --git a/apps/adv-launcher/src-tauri/tauri.conf.json b/apps/adv-launcher/src-tauri/tauri.conf.json
+--- a/apps/adv-launcher/src-tauri/tauri.conf.json
++++ b/apps/adv-launcher/src-tauri/tauri.conf.json
+@@ -38,7 +38,7 @@
+       "signingIdentity": "-",
+       "entitlements": "macos.entitlements"
+     },
+-    "iOS": { "minimumSystemVersion": "16.2" },
++    "iOS": { "minimumSystemVersion": "14.0" },
+     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/256x256.png", "icons/icon.png", "icons/icon.icns", "icons/icon.ico"]
+   }
+ }
+diff --git a/tools/macos/ffmpeg.json b/tools/macos/ffmpeg.json
+--- a/tools/macos/ffmpeg.json
++++ b/tools/macos/ffmpeg.json
+@@ -3,7 +3,7 @@
+   "url": "https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz",
+   "sha256": "7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3",
+   "minimum_macos": "11.0",
+-  "minimum_ios": "16.2",
++  "minimum_ios": "14.0",
+   "minimum_android": "29",
+   "demuxers": ["asf", "avi", "mpegps", "mpegvideo", "wav"],
+   "decoders": ["mpeg1video", "mpeg2video", "mpeg4", "h264", "wmv1", "wmv2", "wmv3", "vc1", "mp2", "mp3", "wmav1", "wmav2", "wmapro", "pcm_s16le"],
+diff --git a/apps/adv-launcher/src-tauri/src/game_ios.rs b/apps/adv-launcher/src-tauri/src/game_ios.rs
+--- a/apps/adv-launcher/src-tauri/src/game_ios.rs
++++ b/apps/adv-launcher/src-tauri/src/game_ios.rs
+@@ -309,7 +309,9 @@ fn hold_landscape(view: &UIView, landscape: bool) {
+         let controller: *mut AnyObject = msg_send![window, rootViewController];
+         let Some(controller) = controller.as_ref() else { return; };
+         let _: () = msg_send![controller, setSupportedInterfaceOrientations: mask];
+-        let _: () = msg_send![controller, setNeedsUpdateOfSupportedInterfaceOrientations];
++        if objc2::available!(ios = 16.0) {
++            let _: () = msg_send![controller, setNeedsUpdateOfSupportedInterfaceOrientations];
++        }
+         // tao's setters request the appearance updates themselves.
+         let _: () = msg_send![controller, setPrefersStatusBarHidden: landscape];
+         // Auto-hiding makes every touch reveal the indicator and suppresses
+@@ -321,17 +323,21 @@ fn hold_landscape(view: &UIView, landscape: bool) {
+         let edges: usize = if landscape { 15 } else { 0 };
+         let _: () = msg_send![controller, setPreferredScreenEdgesDeferringSystemGestures: edges];
+         let scene: *mut AnyObject = msg_send![window, windowScene];
+-        let Some(scene) = scene.as_ref() else {
+-            return;
+-        };
+-        let preferences: Allocated<AnyObject> =
+-            msg_send![class!(UIWindowSceneGeometryPreferencesIOS), alloc];
+-        let preferences: Retained<AnyObject> =
+-            msg_send![preferences, initWithInterfaceOrientations: mask];
+-        let _: () = msg_send![
+-            scene,
+-            requestGeometryUpdateWithPreferences: &*preferences,
+-            errorHandler: std::ptr::null::<block2::Block<dyn Fn(NonNull<AnyObject>)>>()
+-        ];
++        if objc2::available!(ios = 16.0) {
++            let Some(scene) = scene.as_ref() else {
++                return;
++            };
++            let preferences: Allocated<AnyObject> =
++                msg_send![class!(UIWindowSceneGeometryPreferencesIOS), alloc];
++            let preferences: Retained<AnyObject> =
++                msg_send![preferences, initWithInterfaceOrientations: mask];
++            let _: () = msg_send![
++                scene,
++                requestGeometryUpdateWithPreferences: &*preferences,
++                errorHandler: std::ptr::null::<block2::Block<dyn Fn(NonNull<AnyObject>)>>()
++            ];
++        } else {
++            let _: () = msg_send![class!(UIViewController), attemptRotationToDeviceOrientation];
++        }
+     }
+ }
