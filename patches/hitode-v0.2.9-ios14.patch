@@ -126,3 +126,29 @@ diff --git a/apps/adv-launcher/src-tauri/src/game_ios.rs b/apps/adv-launcher/src
 +        }
      }
  }
+diff --git a/crates/adv-shell/src/session/ios.rs b/crates/adv-shell/src/session/ios.rs
+index e9091ee..bf2bdf7 100644
+--- a/crates/adv-shell/src/session/ios.rs
++++ b/crates/adv-shell/src/session/ios.rs
+@@ -114,11 +114,16 @@ impl MainLoop {
+         let link = unsafe { CADisplayLink::displayLinkWithTarget_selector(&target, sel!(frame:)) };
+         link.setPaused(true);
+         // The guest is told the display runs at 60 Hz.
+-        link.setPreferredFrameRateRange(CAFrameRateRange {
+-            minimum: 30.0,
+-            maximum: 60.0,
+-            preferred: 60.0,
+-        });
++        if objc2::available!(ios = 15.0) {
++            link.setPreferredFrameRateRange(CAFrameRateRange {
++                minimum: 30.0,
++                maximum: 60.0,
++                preferred: 60.0,
++            });
++        } else {
++            #[allow(deprecated)]
++            link.setPreferredFramesPerSecond(60);
++        }
+         unsafe { link.addToRunLoop_forMode(&NSRunLoop::mainRunLoop(), NSRunLoopCommonModes) };
+         driver.wake.signal();
+         Ok(Self {
