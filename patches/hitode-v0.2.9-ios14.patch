@@ -1,3 +1,57 @@
+--- a/apps/adv-launcher/vite.config.ts
++++ b/apps/adv-launcher/vite.config.ts
+@@ -6,5 +6,5 @@
+   plugins: [svelte()],
+   clearScreen: false,
+   server: { port: 5173, strictPort: true },
+-  build: { target: ["es2022", "safari16"], outDir: "dist", emptyOutDir: true },
++  build: { target: ["safari14"], outDir: "dist", emptyOutDir: true },
+ });
+--- a/apps/adv-launcher/index.html
++++ b/apps/adv-launcher/index.html
+@@ -4,6 +4,42 @@
+     <meta charset="utf-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+     <title>Hitode</title>
++    <script>
++      (function () {
++        function show(message) {
++          var app = document.getElementById("app");
++          if (app && app.childNodes.length) return;
++          var box = document.getElementById("boot-error");
++          if (!box) {
++            box = document.createElement("pre");
++            box.id = "boot-error";
++            box.style.cssText = "position:fixed;inset:24px;z-index:99999;padding:20px;background:#fff;color:#a00;white-space:pre-wrap;font:16px/1.5 sans-serif;";
++            (document.body || document.documentElement).appendChild(box);
++          }
++          box.textContent = "Hitode 界面启动失败：\n" + message + "\n\n请将此页面截图发送给构建者。";
++        }
++        window.addEventListener("error", function (event) {
++          show(event.message || "脚本或资源加载失败");
++        });
++        window.addEventListener("unhandledrejection", function (event) {
++          show(String(event.reason || "未处理的 Promise 错误"));
++        });
++        window.setTimeout(function () {
++          show("等待界面脚本执行超时；可能是 WebKit 版本不兼容。");
++        }, 8000);
++        if (!Array.prototype.at) {
++          Object.defineProperty(Array.prototype, "at", {
++            value: function (index) {
++              index = Math.trunc(index) || 0;
++              if (index < 0) index += this.length;
++              return this[index];
++            },
++            configurable: true,
++            writable: true
++          });
++        }
++      }());
++    </script>
+   </head>
+   <body>
+     <div id="app"></div>
 diff --git a/apps/adv-launcher/src-tauri/tauri.conf.json b/apps/adv-launcher/src-tauri/tauri.conf.json
 --- a/apps/adv-launcher/src-tauri/tauri.conf.json
 +++ b/apps/adv-launcher/src-tauri/tauri.conf.json
