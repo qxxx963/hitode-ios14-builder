@@ -72,3 +72,25 @@ diff --git a/apps/adv-launcher/src-tauri/src/game_ios.rs b/apps/adv-launcher/src
 +        }
      }
  }
+diff --git a/apps/adv-launcher/scripts/ios-team.mjs b/apps/adv-launcher/scripts/ios-team.mjs
+--- a/apps/adv-launcher/scripts/ios-team.mjs
++++ b/apps/adv-launcher/scripts/ios-team.mjs
+@@ -9,8 +9,14 @@
+   "../src-tauri/gen/apple/adv-launcher.xcodeproj/project.pbxproj",
+   import.meta.url,
+ );
+-if (/^[A-Z0-9]+$/.test(team)) {
+-  const text = readFileSync(project, "utf8");
+-  writeFileSync(project, text.replaceAll('"$(APPLE_DEVELOPMENT_TEAM)"', `"${team}"`));
+-}
++const text = readFileSync(project, "utf8");
++writeFileSync(
++  project,
++  text
++    .replaceAll(
++      "IPHONEOS_DEPLOYMENT_TARGET = 16.2;",
++      "IPHONEOS_DEPLOYMENT_TARGET = 14.0;",
++    )
++    .replaceAll('"$(APPLE_DEVELOPMENT_TEAM)"', `"${team}"`),
++);
+ 
